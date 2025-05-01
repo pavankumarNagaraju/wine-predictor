@@ -1,1 +1,53 @@
+1. EC2 Setup Instructions
 
+    Step 1: Launch EC2 Instances
+            Launch 5 t2.medium instances (Ubuntu 22.04) using AWS Academy, 1 master and 4 workers
+            Open ports 22 (SSH) and 7077, 8080 (Spark)
+
+    Step 2: Install Java and Spark
+            sudo apt update && sudo apt install -y openjdk-17-jdk wget
+            wget https://downloads.apache.org/spark/spark-3.4.1/spark-3.4.1-bin-hadoop3.tgz
+
+            Set environment variables in ~/.bashrc.
+
+    Step 3: Configure Spark Standalone Cluster
+            On master: ./sbin/start-master.sh
+            On each worker: ./sbin/start-slave.sh spark://<master-private-ip>:7077
+
+2. Model Training Using Spark
+
+      Run the following command on the master node:
+      spark-submit \
+      --class com.cs643.assignment2.App \
+      --master spark://<master-private-ip>:7077 \
+      --packages org.apache.hadoop:hadoop-aws:3.3.1,com.amazonaws:aws-java-sdk-bundle:1.11.901 \
+      target/wine-predictor-1.0.jar \
+      s3a://cs643-wine-date-pn338/TrainingDataset.csv \
+      s3a://cs643-wine-date-pn338/ValidationDataset.csv
+
+      This trains logistic regression and random forest classifiers.
+      The best model (Random Forest) is saved to:s3a://cs643-wine-date-pn338/best_model/
+3. Running Prediction in Docker
+
+    Step 1: Build Docker Image
+            Create Dockerfile:
+            FROM openjdk:17-jdk-slim
+            COPY target/wine-predictor-1.0.jar /app/wine-predictor.jar
+            ENTRYPOINT ["java", "-cp", "/app/wine-predictor.jar", "com.cs643.assignment2.Test"]
+      Build and push:
+            docker build -t <your-dockerhub-username>/wine-predictor .
+            docker push <your-dockerhub-username>/wine-predictor
+    Step 2: Run Docker Container
+            docker run \
+            -v ~/.aws:/root/.aws \
+            <your-dockerhub-username>/wine-predictor \
+            s3a://cs643-wine-date-pn338/best_model \
+            s3a://cs643-wine-date-pn338/ValidationDataset.csv
+    This will output predictions and the model's F1 score.
+
+4. Output 
+    Model Performance - F1 Score: 0.5539
+
+5. Note 
+        Ensure your EC2 instance has an IAM role with S3 access or configure credentials in ~/.aws/credentials.
+        If using private buckets, ensure permissions are correctly set.
